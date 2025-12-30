@@ -8,194 +8,250 @@
 </head>
 <body>
   <header class="topbar">
-    <h1>图片拼接 + 水印（本地处理，不上传）</h1>
-    <div class="hint">默认不自动刷新：改参数后点「生成预览」</div>
+    <div class="brand">
+      <div class="logo">🧩</div>
+      <div>
+        <div class="title">图片拼接 + 水印</div>
+        <div class="subtitle">浏览器本地处理，不上传服务器</div>
+      </div>
+    </div>
+    <div class="actions">
+      <label class="toggle">
+        <input id="autoRender" type="checkbox" />
+        <span>自动预览</span>
+      </label>
+      <button id="renderBtn" class="btn primary" type="button">生成预览</button>
+      <button id="clearBtn" class="btn ghost" type="button">清空</button>
+    </div>
   </header>
 
-  <main class="layout">
-    <section class="panel">
-      <div class="block">
-        <label class="label">选择图片（可多选）</label>
-        <input id="fileInput" type="file" accept="image/*" multiple />
-        <div class="row gap">
-          <button id="renderBtn" type="button" class="btn">生成预览</button>
-          <button id="clearBtn" type="button" class="btn secondary">清空</button>
+  <main class="container">
+    <!-- 预览 -->
+    <section class="card previewCard" aria-label="预览">
+      <div class="cardHeader">
+        <div>
+          <div class="cardTitle">预览</div>
+          <div id="outInfo" class="cardHint">未生成</div>
         </div>
-        <div class="row gap" style="margin-top:8px;">
-          <label class="checkbox">
-            <input id="autoRender" type="checkbox" />
-            <span>自动预览（可选）</span>
-          </label>
+        <div class="exportBar">
+          <button id="dlPng" class="btn primary" type="button" disabled>下载 PNG</button>
+          <button id="dlJpg" class="btn" type="button" disabled>下载 JPEG</button>
         </div>
       </div>
 
+      <div class="canvasWrap">
+        <canvas id="canvas"></canvas>
+        <div class="emptyState" id="emptyState">
+          <div class="emptyTitle">把图片拖进来</div>
+          <div class="emptySub">或点击右侧「添加图片」</div>
+        </div>
+      </div>
+
+      <div class="footHint">
+        提示：预览不会滚轮缩放；如果画布太大，调小「最大输出宽/高」再点「生成预览」。
+      </div>
+    </section>
+
+    <!-- 控制面板 -->
+    <section class="card panelCard" aria-label="设置">
+      <div class="cardHeader">
+        <div>
+          <div class="cardTitle">设置</div>
+          <div id="countInfo" class="cardHint">还没有图片</div>
+        </div>
+        <div class="rightTools">
+          <button id="pickBtn" class="btn" type="button">添加图片</button>
+          <input id="fileInput" type="file" accept="image/*" multiple hidden />
+        </div>
+      </div>
+
+      <!-- 拖拽上传 -->
+      <div id="dropzone" class="dropzone" tabindex="0" role="button" aria-label="拖拽上传">
+        <div class="dzIcon">📥</div>
+        <div class="dzText">
+          <div class="dzTitle">拖动图片到这里</div>
+          <div class="dzSub">支持多张；也可以点击此区域选择文件</div>
+        </div>
+      </div>
+
+      <!-- 缩略图 -->
       <div class="block">
-        <label class="label">图片顺序（拖拽排序）</label>
+        <div class="blockTitle">
+          图片顺序
+          <span class="blockSub">桌面端可拖拽排序；手机端用 ↑ ↓</span>
+        </div>
         <ul id="thumbList" class="thumbs"></ul>
-        <div class="small">拖动缩略图可改变拼接顺序；删除图片不会自动刷新，点「生成预览」。</div>
       </div>
 
-      <div class="block">
-        <label class="label">拼接参数</label>
-        <div class="grid2">
-          <div>
-            <label class="small">拼接方式</label>
-            <select id="layoutMode">
-              <option value="h">横向（从左到右）</option>
-              <option value="v">纵向（从上到下）</option>
-              <option value="grid">网格</option>
-            </select>
-          </div>
-          <div>
-            <label class="small">间距(px)</label>
-            <input id="gap" type="number" min="0" value="12" />
-          </div>
-
-          <div>
-            <label class="small">背景色</label>
-            <input id="bg" type="color" value="#ffffff" />
-          </div>
-          <div>
-            <label class="small">最大输出宽(px, 0=不限)</label>
-            <input id="maxW" type="number" min="0" value="1600" />
-          </div>
-
-          <div>
-            <label class="small">最大输出高(px, 0=不限)</label>
-            <input id="maxH" type="number" min="0" value="1600" />
-          </div>
-          <div></div>
-        </div>
-
-        <div id="hOptions" class="subblock">
+      <!-- 拼接设置 -->
+      <details class="accordion" open>
+        <summary>拼接参数</summary>
+        <div class="accBody">
           <div class="grid2">
             <div>
-              <label class="small">横向：统一高度(px, 0=自动取最大)</label>
-              <input id="targetH" type="number" min="0" value="0" />
-            </div>
-            <div class="checkboxRow">
-              <input id="hKeep" type="checkbox" checked />
-              <label for="hKeep">等比缩放</label>
-            </div>
-          </div>
-        </div>
-
-        <div id="vOptions" class="subblock" style="display:none;">
-          <div class="grid2">
-            <div>
-              <label class="small">纵向：统一宽度(px, 0=自动取最大)</label>
-              <input id="targetW" type="number" min="0" value="0" />
-            </div>
-            <div class="checkboxRow">
-              <input id="vKeep" type="checkbox" checked />
-              <label for="vKeep">等比缩放</label>
-            </div>
-          </div>
-        </div>
-
-        <div id="gridOptions" class="subblock" style="display:none;">
-          <div class="grid2">
-            <div>
-              <label class="small">网格：列数</label>
-              <input id="cols" type="number" min="1" value="3" />
-            </div>
-            <div>
-              <label class="small">单元格模式</label>
-              <select id="fitMode">
-                <option value="contain">contain（完整显示）</option>
-                <option value="cover">cover（铺满裁剪）</option>
+              <label class="label">方式</label>
+              <select id="layoutMode">
+                <option value="h">横向</option>
+                <option value="v">纵向</option>
+                <option value="grid">网格</option>
               </select>
             </div>
             <div>
-              <label class="small">单元格宽(px, 0=自动取最大)</label>
-              <input id="cellW" type="number" min="0" value="0" />
+              <label class="label">间距(px)</label>
+              <input id="gap" type="number" min="0" value="12" />
+            </div>
+
+            <div>
+              <label class="label">背景色</label>
+              <input id="bg" type="color" value="#ffffff" />
             </div>
             <div>
-              <label class="small">单元格高(px, 0=自动取最大)</label>
-              <input id="cellH" type="number" min="0" value="0" />
+              <label class="label">最大宽(px, 0=不限)</label>
+              <input id="maxW" type="number" min="0" value="1600" />
+            </div>
+
+            <div>
+              <label class="label">最大高(px, 0=不限)</label>
+              <input id="maxH" type="number" min="0" value="1600" />
+            </div>
+            <div></div>
+          </div>
+
+          <div id="hOptions" class="subOptions">
+            <div class="grid2">
+              <div>
+                <label class="label">统一高度(px, 0=首图高度)</label>
+                <input id="targetH" type="number" min="0" value="0" />
+              </div>
+              <label class="checkline">
+                <input id="hKeep" type="checkbox" checked />
+                <span>等比缩放</span>
+              </label>
+            </div>
+          </div>
+
+          <div id="vOptions" class="subOptions" style="display:none;">
+            <div class="grid2">
+              <div>
+                <label class="label">统一宽度(px, 0=首图宽度)</label>
+                <input id="targetW" type="number" min="0" value="0" />
+              </div>
+              <label class="checkline">
+                <input id="vKeep" type="checkbox" checked />
+                <span>等比缩放</span>
+              </label>
+            </div>
+          </div>
+
+          <div id="gridOptions" class="subOptions" style="display:none;">
+            <div class="grid2">
+              <div>
+                <label class="label">列数</label>
+                <input id="cols" type="number" min="1" value="3" />
+              </div>
+              <div>
+                <label class="label">单元格模式</label>
+                <select id="fitMode">
+                  <option value="contain">contain（完整显示）</option>
+                  <option value="cover">cover（铺满裁剪）</option>
+                </select>
+              </div>
+              <div>
+                <label class="label">单元格宽(px, 0=首图宽)</label>
+                <input id="cellW" type="number" min="0" value="0" />
+              </div>
+              <div>
+                <label class="label">单元格高(px, 0=首图高)</label>
+                <input id="cellH" type="number" min="0" value="0" />
+              </div>
             </div>
           </div>
         </div>
-      </div>
+      </details>
 
-      <div class="block">
-        <label class="label">水印</label>
-        <div class="grid2">
-          <div class="checkboxRow" style="grid-column: 1 / -1;">
-            <input id="wmEnable" type="checkbox" />
-            <label for="wmEnable">启用水印</label>
-          </div>
+      <!-- 水印设置 -->
+      <details class="accordion">
+        <summary>水印</summary>
+        <div class="accBody">
+          <div class="grid2">
+            <label class="checkline" style="grid-column: 1 / -1;">
+              <input id="wmEnable" type="checkbox" />
+              <span>启用水印</span>
+            </label>
 
-          <div style="grid-column: 1 / -1;">
-            <label class="small">水印文字</label>
-            <input id="wmText" type="text" placeholder="例如：© My Brand / 仅供内部使用" />
-          </div>
+            <div style="grid-column: 1 / -1;">
+              <label class="label">文字</label>
+              <input id="wmText" type="text" placeholder="例如：© My Brand / 仅供内部使用" />
+            </div>
 
-          <div>
-            <label class="small">大小(px)</label>
-            <input id="wmSize" type="number" min="8" value="32" />
-          </div>
-          <div>
-            <label class="small">颜色</label>
-            <input id="wmColor" type="color" value="#000000" />
-          </div>
+            <div>
+              <label class="label">模式</label>
+              <select id="wmMode">
+                <option value="corner">角落/居中</option>
+                <option value="tile">全图平铺</option>
+              </select>
+            </div>
+            <div>
+              <label class="label">位置</label>
+              <select id="wmPos">
+                <option value="br">右下</option>
+                <option value="bl">左下</option>
+                <option value="tr">右上</option>
+                <option value="tl">左上</option>
+                <option value="c">居中</option>
+              </select>
+            </div>
 
-          <div>
-            <label class="small">透明度(0~1)</label>
-            <input id="wmAlpha" type="number" min="0" max="1" step="0.05" value="0.25" />
-          </div>
-          <div>
-            <label class="small">旋转(度)</label>
-            <input id="wmRot" type="number" value="0" />
-          </div>
+            <div>
+              <label class="label">大小(px)</label>
+              <input id="wmSize" type="number" min="8" value="32" />
+            </div>
+            <div>
+              <label class="label">颜色</label>
+              <input id="wmColor" type="color" value="#000000" />
+            </div>
 
-          <div>
-            <label class="small">位置</label>
-            <select id="wmPos">
-              <option value="br">右下</option>
-              <option value="bl">左下</option>
-              <option value="tr">右上</option>
-              <option value="tl">左上</option>
-              <option value="c">居中</option>
-            </select>
-          </div>
-          <div>
-            <label class="small">边距(px)</label>
-            <input id="wmPad" type="number" min="0" value="18" />
+            <div>
+              <label class="label">透明度(0~1)</label>
+              <input id="wmAlpha" type="number" min="0" max="1" step="0.05" value="0.25" />
+            </div>
+            <div>
+              <label class="label">旋转(度)</label>
+              <input id="wmRot" type="number" value="0" />
+            </div>
+
+            <div id="cornerOpt">
+              <label class="label">边距(px)</label>
+              <input id="wmPad" type="number" min="0" value="18" />
+            </div>
+
+            <div id="tileOpt">
+              <label class="label">平铺间距(px)</label>
+              <input id="wmTileGap" type="number" min="40" value="260" />
+            </div>
           </div>
         </div>
-        <div class="small">水印会显示在预览里，也会写入导出的图片。</div>
-      </div>
+      </details>
 
-      <div class="block">
-        <label class="label">导出</label>
-        <div class="grid2">
-          <div>
-            <label class="small">JPEG质量(0~1)</label>
-            <input id="jpegQ" type="number" min="0" max="1" step="0.05" value="0.92" />
+      <!-- 导出设置 -->
+      <details class="accordion">
+        <summary>导出</summary>
+        <div class="accBody">
+          <div class="grid2">
+            <div>
+              <label class="label">JPEG质量(0~1)</label>
+              <input id="jpegQ" type="number" min="0" max="1" step="0.05" value="0.92" />
+            </div>
+            <div class="hintLine">
+              导出会包含水印
+            </div>
           </div>
-          <div></div>
         </div>
-
-        <div class="row gap" style="margin-top:10px;">
-          <button id="dlPng" type="button" class="btn">下载 PNG</button>
-          <button id="dlJpg" type="button" class="btn secondary">下载 JPEG</button>
-        </div>
-        <div id="outInfo" class="small mono"></div>
-      </div>
-    </section>
-
-    <section class="preview">
-      <div class="canvasWrap">
-        <canvas id="canvas"></canvas>
-      </div>
-      <div class="small">预览不会“滚轮缩放”。如果太大，调小「最大输出宽/高」再点「生成预览」。</div>
+      </details>
     </section>
   </main>
 
-  <footer class="footer small">
-    本工具在浏览器本地合成图片，不会上传到服务器。适合部署到 Cloudflare Pages。
-  </footer>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
   <script type="module" src="./app.js"></script>
 </body>
