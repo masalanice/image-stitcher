@@ -3,89 +3,76 @@ const $ = (id) => document.getElementById(id);
 const fileInput = $("fileInput");
 const pickBtn = $("pickBtn");
 const dropzone = $("dropzone");
-const thumbList = $("thumbList");
-
-const canvas = $("canvas");
-const ctx = canvas.getContext("2d");
 
 const renderBtn = $("renderBtn");
 const clearBtn = $("clearBtn");
-const autoRender = $("autoRender");
 
-const layoutMode = $("layoutMode");
-const gapEl = $("gap");
-const bgEl = $("bg");
-const maxWEl = $("maxW");
-const maxHEl = $("maxH");
-
-const hOptions = $("hOptions");
-const vOptions = $("vOptions");
-const gridOptions = $("gridOptions");
-const targetHEl = $("targetH");
-const targetWEl = $("targetW");
-const hKeepEl = $("hKeep");
-const vKeepEl = $("vKeep");
-const colsEl = $("cols");
-const fitModeEl = $("fitMode");
-const cellWEl = $("cellW");
-const cellHEl = $("cellH");
+const modeHBtn = $("modeH");
+const modeVBtn = $("modeV");
+const refSelect = $("refSelect");
 
 const wmEnableEl = $("wmEnable");
 const wmTextEl = $("wmText");
 const wmModeEl = $("wmMode");     // corner / tile
 const wmPosEl = $("wmPos");
 const wmSizeEl = $("wmSize");
-const wmColorEl = $("wmColor");
 const wmAlphaEl = $("wmAlpha");
 const wmRotEl = $("wmRot");
-const wmPadEl = $("wmPad");
 const wmTileGapEl = $("wmTileGap");
-const cornerOpt = $("cornerOpt");
-const tileOpt = $("tileOpt");
+const cornerPosWrap = $("cornerPosWrap");
+const tileGapWrap = $("tileGapWrap");
 
-const jpegQEl = $("jpegQ");
-const dlPng = $("dlPng");
-const dlJpg = $("dlJpg");
-const outInfo = $("outInfo");
+const thumbList = $("thumbList");
 const countInfo = $("countInfo");
-const emptyState = $("emptyState");
+const outInfo = $("outInfo");
 const toastEl = $("toast");
 
-let items = [];      // [{file,url,bitmap,w,h}]
-let dragIndex = null;
-let defaultsApplied = false;
-let toastTimer = null;
+const stage = $("stage");
+const canvas = $("canvas");
+const ctx = canvas.getContext("2d");
+const emptyState = $("emptyState");
 
+const dlPng = $("dlPng");
+const dlJpg = $("dlJpg");
+
+const fitBtn = $("fitBtn");
+const zoomOutBtn = $("zoomOutBtn");
+const zoomInBtn = $("zoomInBtn");
+const resetZoomBtn = $("resetZoomBtn");
+const zoomLabel = $("zoomLabel");
+
+let items = []; // [{file,url,bitmap,w,h,name}]
+let mode = "h"; // h or v
+let dragIndex = null;
+
+// 预览缩放（影响显示大小，不影响导出）
+let viewScale = 1;
+
+// 拖拽平移（通过滚动实现）
+let grab = null; // {x,y,sl,st}
+
+let toastTimer = null;
 function toast(msg){
   toastEl.textContent = msg;
   toastEl.style.display = "block";
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => {
-    toastEl.style.display = "none";
-  }, 1800);
+  toastTimer = setTimeout(() => toastEl.style.display = "none", 1600);
 }
 
-function clamp(n, min, max){
-  return Math.max(min, Math.min(max, n));
-}
+function clamp(n, a, b){ return Math.max(a, Math.min(b, n)); }
 
-function setButtonsEnabled(ok){
+function setUIEnabled(ok){
   renderBtn.disabled = !ok;
+  clearBtn.disabled = !ok;
+  refSelect.disabled = !ok;
+
   dlPng.disabled = !ok;
   dlJpg.disabled = !ok;
-}
 
-function showOptions(){
-  const mode = layoutMode.value;
-  hOptions.style.display = mode === "h" ? "" : "none";
-  vOptions.style.display = mode === "v" ? "" : "none";
-  gridOptions.style.display = mode === "grid" ? "" : "none";
-}
-
-function showWatermarkOptions(){
-  const mode = wmModeEl.value;
-  cornerOpt.style.display = mode === "corner" ? "" : "none";
-  tileOpt.style.display = mode === "tile" ? "" : "none";
+  fitBtn.disabled = !ok;
+  zoomOutBtn.disabled = !ok;
+  zoomInBtn.disabled = !ok;
+  resetZoomBtn.disabled = !ok;
 }
 
 async function fileToBitmap(file){
@@ -102,14 +89,32 @@ async function fileToBitmap(file){
   return bmp;
 }
 
-function updateCountInfo(){
-  if (!items.length) {
+function updateCount(){
+  if (!items.length){
     countInfo.textContent = "还没有图片";
     emptyState.style.display = "flex";
+    outInfo.textContent = "未生成";
     return;
   }
-  countInfo.textContent = `已添加 ${items.length} 张图片`;
+  countInfo.textContent = `已选择 ${items.length} 张`;
   emptyState.style.display = "none";
+}
+
+function showWatermarkOptions(){
+  const m = wmModeEl.value;
+  cornerPosWrap.style.display = m === "corner" ? "" : "none";
+  tileGapWrap.style.display = m === "tile" ? "" : "none";
+}
+
+function renderRefSelect(){
+  refSelect.innerHTML = "";
+  items.forEach((it, idx) => {
+    const opt = document.createElement("option");
+    opt.value = String(idx);
+    opt.textContent = `第 ${idx + 1} 张（${it.name || "image"}）`;
+    refSelect.appendChild(opt);
+  });
+  if (items.length) refSelect.value = "0";
 }
 
 function renderThumbs(){
@@ -141,7 +146,7 @@ function renderThumbs(){
       const [moved] = items.splice(idx, 1);
       items.splice(idx - 1, 0, moved);
       renderThumbs();
-      if (autoRender.checked) safeRender();
+      renderRefSelect();
     };
 
     const down = document.createElement("button");
@@ -154,7 +159,7 @@ function renderThumbs(){
       const [moved] = items.splice(idx, 1);
       items.splice(idx + 1, 0, moved);
       renderThumbs();
-      if (autoRender.checked) safeRender();
+      renderRefSelect();
     };
 
     const rm = document.createElement("button");
@@ -166,11 +171,10 @@ function renderThumbs(){
       URL.revokeObjectURL(it.url);
       items.splice(idx, 1);
       renderThumbs();
-      updateCountInfo();
-      defaultsApplied = false;
-      if (autoRender.checked) safeRender();
-      else setButtonsEnabled(items.length > 0);
-      toast("已删除 1 张图片");
+      renderRefSelect();
+      updateCount();
+      setUIEnabled(items.length > 0);
+      toast("已删除 1 张");
     };
 
     btns.appendChild(up);
@@ -181,7 +185,7 @@ function renderThumbs(){
     li.appendChild(badge);
     li.appendChild(btns);
 
-    // 桌面端拖拽排序（手机端很多浏览器不稳定，所以另外提供 ↑↓）
+    // 桌面拖拽排序
     li.addEventListener("dragstart", (e) => {
       dragIndex = idx;
       li.classList.add("dragging");
@@ -191,12 +195,8 @@ function renderThumbs(){
       dragIndex = null;
       li.classList.remove("dragging");
       renderThumbs();
-      if (autoRender.checked) safeRender();
     });
-    li.addEventListener("dragover", (e) => {
-      e.preventDefault();
-      e.dataTransfer.dropEffect = "move";
-    });
+    li.addEventListener("dragover", (e) => { e.preventDefault(); });
     li.addEventListener("drop", (e) => {
       e.preventDefault();
       const to = Number(li.dataset.idx);
@@ -205,62 +205,27 @@ function renderThumbs(){
       items.splice(to, 0, moved);
       dragIndex = null;
       renderThumbs();
-      if (autoRender.checked) safeRender();
+      renderRefSelect();
     });
 
     thumbList.appendChild(li);
   });
 }
 
-function computeScaleToFit(W, H, maxW, maxH){
-  let s = 1;
-  if (maxW > 0) s = Math.min(s, maxW / W);
-  if (maxH > 0) s = Math.min(s, maxH / H);
-  if (!Number.isFinite(s) || s <= 0) s = 1;
-  return Math.min(1, s);
-}
-
-function fitRectContain(srcW, srcH, dstW, dstH){
-  const s = Math.min(dstW / srcW, dstH / srcH);
-  const w = srcW * s;
-  const h = srcH * s;
-  return { x: (dstW - w) / 2, y: (dstH - h) / 2, w, h };
-}
-
-function fitRectCover(srcW, srcH, dstW, dstH){
-  const s = Math.max(dstW / srcW, dstH / srcH);
-  const w = srcW * s;
-  const h = srcH * s;
-  return { x: (dstW - w) / 2, y: (dstH - h) / 2, w, h };
-}
-
-function applyDefaultsFromFirstIfNeeded(){
-  if (defaultsApplied) return;
-  if (!items.length || !items[0].w || !items[0].h) return;
-
-  const fw = items[0].w;
-  const fh = items[0].h;
-
-  if ((Number(targetHEl.value) || 0) === 0) targetHEl.value = String(fh);
-  if ((Number(targetWEl.value) || 0) === 0) targetWEl.value = String(fw);
-  if ((Number(cellWEl.value) || 0) === 0) cellWEl.value = String(fw);
-  if ((Number(cellHEl.value) || 0) === 0) cellHEl.value = String(fh);
-
-  defaultsApplied = true;
-}
-
+// 水印绘制
 function drawWatermarkCorner(outW, outH){
   const text = (wmTextEl.value || "").trim();
   if (!wmEnableEl.checked || !text) return;
 
   const size = Math.max(8, Number(wmSizeEl.value) || 32);
-  const alpha = clamp(Number(wmAlphaEl.value) || 0.25, 0, 1);
+  const alpha = clamp(Number(wmAlphaEl.value) || 0.22, 0, 1);
   const rot = (Number(wmRotEl.value) || 0) * Math.PI / 180;
-  const pad = Math.max(0, Number(wmPadEl.value) || 0);
+
+  const pad = 18;
 
   ctx.save();
   ctx.globalAlpha = alpha;
-  ctx.fillStyle = wmColorEl.value || "#000000";
+  ctx.fillStyle = "#000";
   ctx.font = `${size}px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial`;
   ctx.textBaseline = "alphabetic";
 
@@ -288,19 +253,17 @@ function drawWatermarkTile(outW, outH){
   const size = Math.max(8, Number(wmSizeEl.value) || 32);
   const alpha = clamp(Number(wmAlphaEl.value) || 0.18, 0, 1);
   const rot = (Number(wmRotEl.value) || -30) * Math.PI / 180;
-  const gap = Math.max(40, Number(wmTileGapEl.value) || 260);
+  const gap = Math.max(80, Number(wmTileGapEl.value) || 260);
 
-  // 用对角线长度做平铺范围
   const diag = Math.ceil(Math.sqrt(outW*outW + outH*outH));
 
   ctx.save();
   ctx.globalAlpha = alpha;
-  ctx.fillStyle = wmColorEl.value || "#000000";
+  ctx.fillStyle = "#000";
   ctx.font = `${size}px ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial`;
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
 
-  // 以画布中心为原点，旋转后在旋转坐标系里平铺
   ctx.translate(outW/2, outH/2);
   ctx.rotate(rot);
 
@@ -309,7 +272,6 @@ function drawWatermarkTile(outW, outH){
       ctx.fillText(text, x, y);
     }
   }
-
   ctx.restore();
 }
 
@@ -319,126 +281,28 @@ function drawWatermark(outW, outH){
   else drawWatermarkCorner(outW, outH);
 }
 
-async function safeRender(){
-  if (items.length === 0) {
-    canvas.width = 0;
-    canvas.height = 0;
-    outInfo.textContent = "未生成";
-    setButtonsEnabled(false);
-    updateCountInfo();
-    return;
-  }
-
-  for (const it of items) {
-    if (!it.bitmap) {
-      it.bitmap = await fileToBitmap(it.file);
-      it.w = it.bitmap.width;
-      it.h = it.bitmap.height;
-    }
-  }
-
-  applyDefaultsFromFirstIfNeeded();
-  render();
-  setButtonsEnabled(true);
+// 缩放：用“改变 canvas 的 CSS 尺寸”实现，保证滚动条可用
+function applyViewScale(){
+  if (!canvas.width || !canvas.height) return;
+  const w = Math.max(1, Math.round(canvas.width * viewScale));
+  const h = Math.max(1, Math.round(canvas.height * viewScale));
+  canvas.style.width = w + "px";
+  canvas.style.height = h + "px";
+  zoomLabel.textContent = `${Math.round(viewScale * 100)}%`;
 }
 
-function render(){
-  const mode = layoutMode.value;
-  const gap = Math.max(0, Number(gapEl.value) || 0);
-  const bg = bgEl.value || "#ffffff";
-  const maxW = Math.max(0, Number(maxWEl.value) || 0);
-  const maxH = Math.max(0, Number(maxHEl.value) || 0);
-
-  const firstW = items[0]?.w || 1;
-  const firstH = items[0]?.h || 1;
-
-  let W = 1, H = 1;
-  let drawList = [];
-
-  if (mode === "h") {
-    const keep = !!hKeepEl.checked;
-    const targetH = (Number(targetHEl.value) || 0) > 0 ? Number(targetHEl.value) : firstH;
-
-    let x = 0;
-    for (const it of items) {
-      const h = targetH;
-      const w = keep ? Math.round((it.w * h) / it.h) : it.w;
-      drawList.push({ bmp: it.bitmap, x, y: 0, w, h });
-      x += w + gap;
-    }
-    W = Math.max(1, x - gap);
-    H = Math.max(1, targetH);
-
-  } else if (mode === "v") {
-    const keep = !!vKeepEl.checked;
-    const targetW = (Number(targetWEl.value) || 0) > 0 ? Number(targetWEl.value) : firstW;
-
-    let y = 0;
-    for (const it of items) {
-      const w = targetW;
-      const h = keep ? Math.round((it.h * w) / it.w) : it.h;
-      drawList.push({ bmp: it.bitmap, x: 0, y, w, h });
-      y += h + gap;
-    }
-    W = Math.max(1, targetW);
-    H = Math.max(1, y - gap);
-
-  } else {
-    const cols = Math.max(1, Number(colsEl.value) || 1);
-    const fitMode = fitModeEl.value || "contain";
-
-    const cellW = (Number(cellWEl.value) || 0) > 0 ? Number(cellWEl.value) : firstW;
-    const cellH = (Number(cellHEl.value) || 0) > 0 ? Number(cellHEl.value) : firstH;
-
-    const rows = Math.ceil(items.length / cols);
-    W = cols * cellW + (cols - 1) * gap;
-    H = rows * cellH + (rows - 1) * gap;
-
-    for (let i = 0; i < items.length; i++) {
-      const it = items[i];
-      const r = Math.floor(i / cols);
-      const c = i % cols;
-      const cellX = c * (cellW + gap);
-      const cellY = r * (cellH + gap);
-
-      const rect = fitMode === "cover"
-        ? fitRectCover(it.w, it.h, cellW, cellH)
-        : fitRectContain(it.w, it.h, cellW, cellH);
-
-      drawList.push({
-        bmp: it.bitmap,
-        x: cellX + rect.x,
-        y: cellY + rect.y,
-        w: rect.w,
-        h: rect.h,
-      });
-    }
-  }
-
-  const scale = computeScaleToFit(W, H, maxW, maxH);
-  const outW = Math.max(1, Math.round(W * scale));
-  const outH = Math.max(1, Math.round(H * scale));
-
-  canvas.width = outW;
-  canvas.height = outH;
-
-  ctx.save();
-  ctx.setTransform(1,0,0,1,0,0);
-  ctx.clearRect(0,0,outW,outH);
-  ctx.fillStyle = bg;
-  ctx.fillRect(0,0,outW,outH);
-
-  ctx.scale(scale, scale);
-  for (const d of drawList) {
-    ctx.drawImage(d.bmp, d.x, d.y, d.w, d.h);
-  }
-  ctx.restore();
-
-  // 水印在最终像素上画（所见即所得）
-  drawWatermark(outW, outH);
-
-  outInfo.textContent = `输出：${outW} × ${outH} px（缩放：${scale.toFixed(3)}）`;
-  updateCountInfo();
+function fitToStage(){
+  if (!canvas.width || !canvas.height) return;
+  const pad = 24; // stage padding 12*2
+  const sw = stage.clientWidth - pad;
+  const sh = stage.clientHeight - pad;
+  if (sw <= 0 || sh <= 0) return;
+  const s = Math.min(sw / canvas.width, sh / canvas.height, 1);
+  viewScale = clamp(s, 0.1, 4);
+  applyViewScale();
+  // 居中
+  stage.scrollLeft = Math.max(0, (canvas.clientWidth - stage.clientWidth) / 2);
+  stage.scrollTop  = Math.max(0, (canvas.clientHeight - stage.clientHeight) / 2);
 }
 
 function downloadBlob(blob, filename){
@@ -452,25 +316,89 @@ function downloadBlob(blob, filename){
   URL.revokeObjectURL(url);
 }
 
+// ✅ 间距固定 0；只支持横/竖
+async function render(){
+  if (!items.length) return;
+
+  // 确保 bitmap 都已加载
+  for (const it of items) {
+    if (!it.bitmap) {
+      it.bitmap = await fileToBitmap(it.file);
+      it.w = it.bitmap.width;
+      it.h = it.bitmap.height;
+    }
+  }
+
+  const refIdx = clamp(Number(refSelect.value || 0), 0, items.length - 1);
+  const ref = items[refIdx];
+
+  let outW = 1, outH = 1;
+  const drawList = [];
+
+  if (mode === "h") {
+    const baseH = ref.h; // ✅ 以基准图高度为统一高度
+    let x = 0;
+    for (const it of items) {
+      const h = baseH;
+      const w = Math.round((it.w * h) / it.h);
+      drawList.push({ bmp: it.bitmap, x, y: 0, w, h });
+      x += w; // 间距固定 0
+    }
+    outW = Math.max(1, x);
+    outH = Math.max(1, baseH);
+  } else {
+    const baseW = ref.w; // ✅ 以基准图宽度为统一宽度
+    let y = 0;
+    for (const it of items) {
+      const w = baseW;
+      const h = Math.round((it.h * w) / it.w);
+      drawList.push({ bmp: it.bitmap, x: 0, y, w, h });
+      y += h; // 间距固定 0
+    }
+    outW = Math.max(1, baseW);
+    outH = Math.max(1, y);
+  }
+
+  canvas.width = outW;
+  canvas.height = outH;
+
+  ctx.save();
+  ctx.setTransform(1,0,0,1,0,0);
+  ctx.clearRect(0,0,outW,outH);
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(0,0,outW,outH);
+
+  for (const d of drawList) {
+    ctx.drawImage(d.bmp, d.x, d.y, d.w, d.h);
+  }
+
+  drawWatermark(outW, outH);
+  ctx.restore();
+
+  // 预览缩放：默认先适配一次
+  applyViewScale();
+  fitToStage();
+
+  outInfo.textContent = `输出：${outW} × ${outH} px（基准：第 ${refIdx + 1} 张）`;
+  toast("预览已生成");
+}
+
+// 上传处理
 function handleFiles(fileList){
   const files = Array.from(fileList || []).filter(f => f.type.startsWith("image/"));
-  if (!files.length) {
-    toast("没有检测到图片文件");
-    return;
-  }
+  if (!files.length) { toast("没有检测到图片文件"); return; }
 
   for (const f of files) {
     const url = URL.createObjectURL(f);
-    items.push({ file: f, url, bitmap: null, w: 0, h: 0 });
+    items.push({ file: f, url, bitmap: null, w: 0, h: 0, name: f.name });
   }
 
-  defaultsApplied = false;
+  updateCount();
   renderThumbs();
-  updateCountInfo();
-  setButtonsEnabled(items.length > 0);
+  renderRefSelect();
+  setUIEnabled(items.length > 0);
 
   toast(`上传成功：已添加 ${files.length} 张`);
-  if (autoRender.checked) safeRender();
 }
 
 // ---- events
@@ -486,66 +414,89 @@ dropzone.addEventListener("dragover", (e) => {
   e.preventDefault();
   dropzone.classList.add("dragover");
 });
-dropzone.addEventListener("dragleave", () => {
-  dropzone.classList.remove("dragover");
-});
+dropzone.addEventListener("dragleave", () => dropzone.classList.remove("dragover"));
 dropzone.addEventListener("drop", (e) => {
   e.preventDefault();
   dropzone.classList.remove("dragover");
   handleFiles(e.dataTransfer.files);
 });
 
-layoutMode.addEventListener("change", () => {
-  showOptions();
-  if (autoRender.checked) safeRender();
+// 拼接方向
+modeHBtn.addEventListener("click", () => {
+  mode = "h";
+  modeHBtn.classList.add("active");
+  modeVBtn.classList.remove("active");
 });
-wmModeEl.addEventListener("change", () => {
-  showWatermarkOptions();
-  if (autoRender.checked) safeRender();
-});
-
-autoRender.addEventListener("change", () => {
-  if (autoRender.checked) safeRender();
-});
-
-renderBtn.addEventListener("click", () => safeRender());
-
-clearBtn.addEventListener("click", () => {
-  for (const it of items) URL.revokeObjectURL(it.url);
-  items = [];
-  defaultsApplied = false;
-  renderThumbs();
-  updateCountInfo();
-  canvas.width = 0;
-  canvas.height = 0;
-  outInfo.textContent = "未生成";
-  setButtonsEnabled(false);
-  toast("已清空");
+modeVBtn.addEventListener("click", () => {
+  mode = "v";
+  modeVBtn.classList.add("active");
+  modeHBtn.classList.remove("active");
 });
 
+// 水印 UI
+wmModeEl.addEventListener("change", showWatermarkOptions);
+
+// 生成
+renderBtn.addEventListener("click", () => render());
+
+// 导出
 dlPng.addEventListener("click", () => {
   if (!canvas.width || !canvas.height) return;
   canvas.toBlob((blob) => blob && downloadBlob(blob, "stitched.png"), "image/png");
 });
-
 dlJpg.addEventListener("click", () => {
   if (!canvas.width || !canvas.height) return;
-  const q = clamp(Number(jpegQEl.value) || 0.92, 0, 1);
-  canvas.toBlob((blob) => blob && downloadBlob(blob, "stitched.jpg"), "image/jpeg", q);
+  canvas.toBlob((blob) => blob && downloadBlob(blob, "stitched.jpg"), "image/jpeg", 0.92);
 });
 
-// 自动预览：开了才实时刷新
-const maybeAuto = () => { if (autoRender.checked) safeRender(); };
-[
-  gapEl, bgEl, maxWEl, maxHEl,
-  targetHEl, targetWEl, hKeepEl, vKeepEl,
-  colsEl, fitModeEl, cellWEl, cellHEl,
-  wmEnableEl, wmTextEl, wmPosEl, wmSizeEl, wmColorEl, wmAlphaEl, wmRotEl, wmPadEl, wmTileGapEl,
-  jpegQEl
-].forEach(el => el.addEventListener("input", maybeAuto));
+// 清空
+clearBtn.addEventListener("click", () => {
+  for (const it of items) URL.revokeObjectURL(it.url);
+  items = [];
+  thumbList.innerHTML = "";
+  refSelect.innerHTML = "";
+  canvas.width = 0;
+  canvas.height = 0;
+  canvas.style.width = "0px";
+  canvas.style.height = "0px";
+  viewScale = 1;
+  zoomLabel.textContent = "100%";
+  updateCount();
+  setUIEnabled(false);
+  toast("已清空");
+});
+
+// 预览缩放按钮
+zoomInBtn.addEventListener("click", () => {
+  viewScale = clamp(viewScale * 1.2, 0.1, 6);
+  applyViewScale();
+});
+zoomOutBtn.addEventListener("click", () => {
+  viewScale = clamp(viewScale / 1.2, 0.1, 6);
+  applyViewScale();
+});
+resetZoomBtn.addEventListener("click", () => {
+  viewScale = 1;
+  applyViewScale();
+});
+fitBtn.addEventListener("click", () => fitToStage());
+
+// 预览区拖拽平移：通过改 scrollLeft/scrollTop
+stage.addEventListener("mousedown", (e) => {
+  grab = { x: e.clientX, y: e.clientY, sl: stage.scrollLeft, st: stage.scrollTop };
+  stage.classList.add("grabbing");
+});
+window.addEventListener("mousemove", (e) => {
+  if (!grab) return;
+  stage.scrollLeft = grab.sl - (e.clientX - grab.x);
+  stage.scrollTop  = grab.st - (e.clientY - grab.y);
+});
+window.addEventListener("mouseup", () => {
+  grab = null;
+  stage.classList.remove("grabbing");
+});
 
 // init
-showOptions();
+updateCount();
 showWatermarkOptions();
-updateCountInfo();
-setButtonsEnabled(false);
+setUIEnabled(false);
