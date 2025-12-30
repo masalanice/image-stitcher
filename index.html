@@ -1,0 +1,193 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>图片拼图（本地编辑）</title>
+  <link rel="stylesheet" href="./style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <h1>图片拼图（本地编辑，不上传）</h1>
+    <div class="hint">拖拽摆放、吸附对齐、圆角阴影、加水印、导出多倍率</div>
+  </header>
+
+  <main class="layout">
+    <section class="panel">
+      <div class="block">
+        <label class="label">选择图片（可多选）</label>
+        <input id="fileInput" type="file" accept="image/*" multiple />
+        <div class="row gap">
+          <button id="addTextBtn" type="button" class="btn secondary">添加水印</button>
+          <button id="clearBtn" type="button" class="btn secondary">清空</button>
+        </div>
+      </div>
+
+      <div class="block">
+        <label class="label">画布</label>
+        <div class="grid2">
+          <div>
+            <label class="small">宽(px)</label>
+            <input id="canvasW" type="number" min="64" value="1200" />
+          </div>
+          <div>
+            <label class="small">高(px)</label>
+            <input id="canvasH" type="number" min="64" value="800" />
+          </div>
+          <div>
+            <label class="small">背景色</label>
+            <input id="bg" type="color" value="#ffffff" />
+          </div>
+          <div class="checkbox">
+            <input id="showGrid" type="checkbox" />
+            <label for="showGrid">显示网格</label>
+          </div>
+          <div class="checkbox">
+            <input id="snap" type="checkbox" checked />
+            <label for="snap">吸附对齐</label>
+          </div>
+          <div>
+            <label class="small">吸附阈值(px)</label>
+            <input id="snapT" type="number" min="0" value="6" />
+          </div>
+        </div>
+
+        <div class="row gap" style="margin-top:10px;">
+          <button id="fitAllBtn" type="button" class="btn secondary">自动排布</button>
+          <button id="resetZoomBtn" type="button" class="btn secondary">重置视图</button>
+        </div>
+        <div class="small">提示：滚轮缩放视图，按住空格拖动画布；选中图层后可用方向键微调（Shift=10px）。</div>
+      </div>
+
+      <div class="block">
+        <label class="label">图层（拖拽排序）</label>
+        <ul id="layerList" class="layers"></ul>
+        <div class="row gap">
+          <button id="bringUpBtn" class="btn secondary" type="button">上移</button>
+          <button id="bringDownBtn" class="btn secondary" type="button">下移</button>
+          <button id="toTopBtn" class="btn secondary" type="button">置顶</button>
+          <button id="toBottomBtn" class="btn secondary" type="button">置底</button>
+        </div>
+      </div>
+
+      <div class="block">
+        <label class="label">选中图层属性</label>
+        <div class="grid2">
+          <div>
+            <label class="small">圆角(px)</label>
+            <input id="radius" type="number" min="0" value="0" />
+          </div>
+          <div>
+            <label class="small">不透明度(0~1)</label>
+            <input id="opacity" type="number" min="0" max="1" step="0.05" value="1" />
+          </div>
+
+          <div>
+            <label class="small">阴影模糊(px)</label>
+            <input id="sBlur" type="number" min="0" value="18" />
+          </div>
+          <div>
+            <label class="small">阴影透明度(0~1)</label>
+            <input id="sAlpha" type="number" min="0" max="1" step="0.05" value="0.25" />
+          </div>
+
+          <div>
+            <label class="small">阴影X(px)</label>
+            <input id="sX" type="number" value="0" />
+          </div>
+          <div>
+            <label class="small">阴影Y(px)</label>
+            <input id="sY" type="number" value="8" />
+          </div>
+        </div>
+
+        <div class="row gap" style="margin-top:10px;">
+          <button id="dupBtn" class="btn secondary" type="button">复制</button>
+          <button id="delBtn" class="btn danger" type="button">删除</button>
+        </div>
+      </div>
+
+      <div class="block">
+        <label class="label">水印</label>
+        <div class="grid2">
+          <div style="grid-column: 1 / -1;">
+            <label class="small">文字</label>
+            <input id="wmText" type="text" placeholder="例如：© My Brand / 仅供内部使用" />
+          </div>
+          <div>
+            <label class="small">大小(px)</label>
+            <input id="wmSize" type="number" min="8" value="32" />
+          </div>
+          <div>
+            <label class="small">颜色</label>
+            <input id="wmColor" type="color" value="#000000" />
+          </div>
+          <div>
+            <label class="small">透明度(0~1)</label>
+            <input id="wmAlpha" type="number" min="0" max="1" step="0.05" value="0.2" />
+          </div>
+          <div>
+            <label class="small">旋转(度)</label>
+            <input id="wmRot" type="number" value="0" />
+          </div>
+          <div>
+            <label class="small">位置</label>
+            <select id="wmPos">
+              <option value="br">右下</option>
+              <option value="bl">左下</option>
+              <option value="tr">右上</option>
+              <option value="tl">左上</option>
+              <option value="c">居中</option>
+            </select>
+          </div>
+          <div class="checkbox">
+            <input id="wmEnable" type="checkbox" />
+            <label for="wmEnable">启用水印</label>
+          </div>
+        </div>
+      </div>
+
+      <div class="block">
+        <label class="label">导出</label>
+        <div class="grid2">
+          <div>
+            <label class="small">倍率</label>
+            <select id="scale">
+              <option value="1">1x</option>
+              <option value="2">2x</option>
+              <option value="3">3x</option>
+              <option value="custom">自定义</option>
+            </select>
+          </div>
+          <div>
+            <label class="small">自定义倍率</label>
+            <input id="scaleCustom" type="number" min="0.25" step="0.25" value="1" />
+          </div>
+          <div>
+            <label class="small">JPEG质量(0~1)</label>
+            <input id="jpegQ" type="number" min="0" max="1" step="0.05" value="0.92" />
+          </div>
+          <div></div>
+        </div>
+
+        <div class="row gap" style="margin-top:10px;">
+          <button id="dlPng" type="button" class="btn">下载 PNG</button>
+          <button id="dlJpg" type="button" class="btn secondary">下载 JPEG</button>
+        </div>
+        <div id="outInfo" class="small mono"></div>
+      </div>
+    </section>
+
+    <section class="preview">
+      <div class="canvasWrap">
+        <canvas id="canvas"></canvas>
+      </div>
+      <div class="small">鼠标：拖拽移动；拖拽控制点缩放；滚轮缩放视图；空格拖动视图。键盘：Delete 删除，方向键移动。</div>
+    </section>
+  </main>
+
+  <footer class="footer small">浏览器本地合成，不会上传到服务器。适合 Cloudflare Pages 部署。</footer>
+
+  <script type="module" src="./app.js"></script>
+</body>
+</html>
